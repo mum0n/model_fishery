@@ -12,6 +12,7 @@
 /ignore
 /archive
 /papers
+/docs
 /outputs
 /test
 *.html
