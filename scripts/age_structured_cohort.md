@@ -1,60 +1,7 @@
 
 # Age-structured cohort-based population  
 
-Age-structured that track cohorts (age-groups) over time is/was used commonly in fisheries applications to estimate population structure/demographics from fisheries catch data as that is the simplest data to gather. Generally, catch is assumed to be known without error. Cohort populations were estimated via back-calculation/propagation/projection ("Cohort Analysis") with simple assumptions (catch + cohort) to help re-create a "virtual" population (Fry 1949, based on Derzhavin 1922):
-
-$N_{a+1,y+1} = N_{a,y} - C_{a,y} - Z_{a,y}$,
-
-for a given age $a$ and year $y$, in discrete form. 
-
-**For each cohort**, refining of the above to instantaneous total mortality ($Z$) as a combination of natural ($M$) and fishing ($F$) mortality and catachability ($q$) is attributed to Ricker, Beverton, Holt, and Paloheimo. Gulland (1965) is attributed this "backwards" mode which provided more convergent solutions (stable); Murphy (1965) estimated fishing mortality at early ages in forward mode which was found to give more divergent solutions (unstable). As such backwards mode was generally more favoured.
-
-Beginning with the Baranov catch equation:
-
-$C_t = [F_t / (F_t + M) ] \; N_t (1 - e^{-Z_t} )$
-
-and a first order, nonlinear, decay equation:
-
-$N_{t+1} = N_t \; e^{-Z_t} \; \; <=> \; \; N_t = N_{t+1} \; e^{Z_t}$,
-
-gives in terms of catch, "terminal" fishing mortality and natural mortality:
-
-$N_t = C_t / [ ( F_t / Z_t ) (1 - e^{-Z_t}) ]$ 
-
-at $y=t$ the terminal year and Terminal fishing mortality $F_t$ and total mortality $Z_t=F_t + M_{(t)}$, where M is usually a constant but can be variable with time or age.
-
-A further simplification, to avoid nonlinear regression, is the use of a step function for fishing mortality that is assumed to occur in one instant at exactly 1/2 through a time cycle (usually 1 year) and background natural mortality at a constant rate; this approximation is attributed to Pope (1972):
-
-$N_{t+0.5} = N_t \; e^{-M/2} - C_t  \;$
-
-$N_{t+1} = N_{t+0.5} \; e^{-M/2}$
-
-$\quad \quad \; = [N_t \; e^{-M/2} - C_t ] \; e^{-M/2}$
-
-which essentially amounts to [natural mortality before fishing event - catch] * natural mortality of remainder. Generally results are more stable with Z < 1 and M < F. It simplifies to:
-
-$N_{t+1}  = N_t \; e^{-M} - C_t \; e^{-M/2}$
-
-Solving for $N_t$ gives:
-
-$N_{t} = N_{t+1} \; e^M + C_t \; e^{M/2}$, 
-
-and fishing mortality can be estimated as:
-
-$F_t = \log( | N_t / N/{t+1}| ) - M$
-
-Various methods of estimating M exist. A useful one is to express Z vs effort. The Y-intercept provides the magnitude of background natural mortality and the slope represents the catchability coefficient q.
-
-Additional structure in the form of distributional constraints that were "tuned" to an independent index of abundance, were known as ADAPT-VPA's and with multiple indices, as Integrated Catch Analysis. With the use of priors (e.g., Bayesian modelling) continued evolution/refinement of numerical methods and assumptions on age and maturity could be made, see eg, Millar and Meyer (2000) CJFAS 57:43-50 (Sequential Population Analysis).
-
-All these methods assume age structure is reasonably well represented and errors in ageing of animals and usually a fixed natural mortality assumption and that catch is observed without error, no movement and no discards. They are important sources of uncertainty.
-
-
-### Good resources: 
-
-https://people.uncw.edu/scharff/courses/458/Lecture%2013%20-%20cohort%20models.pdf
-
-
+Age-structured that track cohorts (age-groups) over time is/was used commonly in fisheries applications to estimate population structure/demographics from fisheries catch data as that is the simplest data to gather.  See [writeup here](../docs/cohort_models.md).
 
 ---
 

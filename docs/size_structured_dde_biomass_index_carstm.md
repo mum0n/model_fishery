@@ -41,7 +41,7 @@ Alter year and directories to reflect setup or copy Makefile and alter defaults 
 
 ## Purpose
 
-Prepare aggregated time-series data for inference using a Bayesian fishery model.  Size structured delay differential equation model.
+Prepare aggregated time-series data for inference using a Bayesian fishery model. Size structured delay differential equation model.
 
 ---
 

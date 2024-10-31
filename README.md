@@ -1,7 +1,25 @@
 # model_fishery
 
+This project presents some of the main modelling approaches used in Fisheries Assessments and implemented in the excellent Julia/Turing/SciML.
 
-## Current results:
+
+
+## Models currently implemented:
+
+- [Discrete logistic](scripts/logistic_discrete_snowcrab_fishery_model.md) 
+  - see [writeup here](docs/logstic_discrete_models.md)
+
+- [Six sex/size-stage continuous delay differential equation model](scripts/size_structured_dde_snowcrab_fishery_model.md)  
+  - see [writeup here](docs/ms_choi_v4.pdf)
+
+- [Cohort-based methods for age structured populations (Virtual Population Assessments, etc.)](scripts/age_structured_cohort.md)
+  - see [writeup here](docs/cohort_models.md)
+
+- This list will expand with time so come back to check again.
+ 
+ 
+
+## Current results using snow crab data in Maritimes Region for a subset of these models:
 
 - [Results based upon this developmental branch.](scripts/snowcrab_results_current.md)
 
@@ -10,17 +28,8 @@
 
 ---
 
-## Models currently implemented:
 
-- Discrete logistic (Euler form) 
-
-- Discrete logistic map 
-
-- Six sex/size-stage continuous delay differential equation model  
-
-
-
-## Example data are in RData form: 
+## Example snow crab data are in RData form: 
 
 - [biodyn_number_size_struct.RData](data/biodyn_number_size_struct.RData) 
         
@@ -28,7 +37,7 @@
 
     - used by stage structured models
 
-- [biodyn_biomass.RData](snowcrab/data/biodyn_biomass.RData) 
+- [biodyn_biomass.RData](data/biodyn_biomass.RData) 
         
     - time series by large areal units in biomass 
 
@@ -39,7 +48,10 @@
 
 ## Documentation:
 
+Each modelling approach has a mini-write up in the [docs directory](docs/). The [scripts directory](\scripts) contains Markdown documents with run sequence and commentary as well an "environment" fiel that loads required libraries and start up. The functions used by each script is found in the [src directory](src/).
+
+
 [An example using this approach is found here](https://www.biorxiv.org/content/10.1101/2023.02.13.528296v3) for **snowcrab**. It is now grafted onto bio.snowcrab for operational work (as of Jan 2023) 
 
-[Current documentation is here.](snowcrab/ms_choi_v3.pdf)  
+[Current documentation is here.](docs/ms_choi_v4.pdf)  
 

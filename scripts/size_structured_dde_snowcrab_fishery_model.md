@@ -1,7 +1,7 @@
 
 # Dynamical models for snow crab fisheries in the Maritimes Region of Canada, implemented in Julia
 
-## dde variation
+See [theory and writeup here](../docs/ms_choi_v4.pdf).
 
 ---
  
