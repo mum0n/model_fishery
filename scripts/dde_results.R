@@ -3,7 +3,7 @@ dde_results = function(
   year.assessment=2023, 
   envir = parent.frame(),
   debugging=FALSE, 
-  loc_dde= file.path( homedir, "projects", "dynamical_model", "snowcrab", "data" ),
+  loc_dde= file.path( homedir, "projects", "model_fishery", "data" ),
   return_as_list=TRUE ) {
     # function to bring in key fishery stats and assessment results and make available in memory 
     # primary usage is for Rmarkdown documents

@@ -90,7 +90,7 @@ Huge > huge > LARGE > Large > large > normalsize > small > footnotesize > script
   SCD = project.datadirectory("bio.snowcrab")
   media_loc = params$media_loc
   
-  # fishery_model_results = file.path( "/home", "jae", "projects", "dynamical_model", "snowcrab", "outputs" )
+  # fishery_model_results = file.path( "/home", "jae", "projects", "model_fishery", "outputs" )
   fishery_model_results = file.path( SCD, "fishery_model" )
 
   sn_env = dde_results( year.assessment, debugging=params$debugging, loc_dde=params$loc_dde, return_as_list=TRUE  ) 
@@ -311,7 +311,7 @@ Supplemental analysis using a more complex model (Model 2) supports these infere
 
 
 ```{r dde-predictions,  out.width='32%', fig.show='hold', fig.align='center', fig.cap='predictions' }
-  loc = file.path( homedir, "projects", "dynamical_model", "snowcrab", "outputs",  year.assessment, "size_structured_dde_normalized" )
+  loc = file.path( homedir, "projects", "model_fishery",  "outputs",  year.assessment, "size_structured_dde_normalized" )
   fn1 = file.path( loc, "plot_predictions_cfanorth.pdf" ) 
   fn2 = file.path( loc, "plot_predictions_cfasouth.pdf" ) 
   fn3 = file.path( loc, "plot_predictions_cfa4x.pdf" ) 
@@ -323,7 +323,7 @@ Supplemental analysis using a more complex model (Model 2) supports these infere
 ##  Fishery Footprint   {.c}
  
 ```{r dde-fisheryfootprint,  out.width='32%', fig.show='hold', fig.align='center', fig.cap='Fishery footprint (Model 2). N-ENS (left), S-ENS (middle), and 4X (right). Projections are based upon status quo TACs.'  }
-  loc = file.path( homedir, "projects", "dynamical_model", "snowcrab", "outputs",  year.assessment, "size_structured_dde_normalized" )
+  loc = file.path( homedir, "projects", "model_fishery", "outputs",  year.assessment, "size_structured_dde_normalized" )
   fn1 = file.path( loc, "plot_trace_footprint_projections_cfanorth__1.0__.pdf" ) 
   fn2 = file.path( loc, "plot_trace_footprint_projections_cfasouth__1.0__.pdf" ) 
   fn3 = file.path( loc, "plot_trace_footprint_projections_cfa4x__1.0__.pdf" ) 
@@ -334,7 +334,7 @@ Supplemental analysis using a more complex model (Model 2) supports these infere
 
 ##  (N-ENS, S-ENS, 4X)
 ```{r dde-hcr,  out.width='32%', fig.show='hold', fig.align='center', fig.cap='hcr' }
-  loc = file.path( homedir, "projects", "dynamical_model", "snowcrab", "outputs",  year.assessment, "size_structured_dde_normalized" )
+  loc = file.path( homedir, "projects", "model_fishery",  "outputs",  year.assessment, "size_structured_dde_normalized" )
   fn1 = file.path( loc, "plot_hcr_cfanorth.pdf" ) 
   fn2 = file.path( loc, "plot_hcr_cfasouth.pdf" ) 
   fn3 = file.path( loc, "plot_hcr_cfa4x.pdf" ) 
@@ -344,7 +344,7 @@ Supplemental analysis using a more complex model (Model 2) supports these infere
 
 ##  (N-ENS, S-ENS, 4X)
 ```{r dde-footprint-trace,   out.width='32%', fig.show='hold', fig.align='center', fig.cap='footprint trace' }
-  loc = file.path( homedir, "projects", "dynamical_model", "snowcrab", "outputs",  year.assessment, "size_structured_dde_normalized" )
+  loc = file.path( homedir, "projects", "model_fishery", "outputs",  year.assessment, "size_structured_dde_normalized" )
   fn1 = file.path( loc, "plot_footprint_trace_cfanorth.pdf" )
   fn2 = file.path( loc, "plot_footprint_trace_cfasouth.pdf" )
   fn3 = file.path( loc, "plot_footprint_trace_cfa4x.pdf" )
@@ -355,7 +355,7 @@ Supplemental analysis using a more complex model (Model 2) supports these infere
 
 ##  (N-ENS, S-ENS, 4X)
 ```{r dde-hcr-footprint,  out.width='32%', fig.show='hold', fig.align='center', fig.cap='hcr footprint' }
-  loc = file.path( homedir, "projects", "dynamical_model", "snowcrab", "outputs",  year.assessment, "size_structured_dde_normalized" )
+  loc = file.path( homedir, "projects", "model_fishery", "outputs",  year.assessment, "size_structured_dde_normalized" )
   fn1 = file.path( loc, "plot_hcr_footprint_cfanorth.pdf" )
   fn2 = file.path( loc, "plot_hcr_footprint_cfasouth.pdf" )
   fn3 = file.path( loc, "plot_hcr_footprint_cfa4x.pdf" )
@@ -365,7 +365,7 @@ Supplemental analysis using a more complex model (Model 2) supports these infere
 
 ##  (N-ENS, S-ENS, 4X)
 ```{r dde-predictions-trace, out.width='32%', fig.show='hold', fig.align='center', fig.cap="predictions_trace" }
- loc = file.path( homedir, "projects", "dynamical_model", "snowcrab", "outputs", year.assessment, "size_structured_dde_normalized" )
+ loc = file.path( homedir, "projects", "model_fishery", "outputs", year.assessment, "size_structured_dde_normalized" )
  include_graphics( file.path( loc, "plot_predictions_trace_cfanorth.pdf" ) )
  include_graphics( file.path( loc, "plot_predictions_trace_cfasouth.pdf" ) ) 
  include_graphics( file.path( loc, "plot_predictions_trace_cfa4x.pdf" ) )

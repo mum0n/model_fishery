@@ -266,7 +266,7 @@ uncertainties. The index generation method being Bayesian, imputes these
 estimates, but variability attached to this year is large. These
 aggregate timeseries data and supporting **Julia** models used in this
 paper are available at:
-<https://github.com/jae0/dynamical_model/tree/master/snowcrab>.
+[model_fishery](https://bitbucket.org/autocatalysis/model_fishery).
 
 The well understood *phenomenological* single component model of
 Verhulst (\cite{Verhulst_1845}; \cite{Bacaër_2011}) is the usual starting point for

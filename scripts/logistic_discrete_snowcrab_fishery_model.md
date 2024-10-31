@@ -42,7 +42,7 @@ and then copy the files manually to appropriate locations or run:
     year.assessment=year.assessment,   
     type="biomass_dynamics", 
     snowcrab_filter_class="fb",
-    modeldir= ifelse( run_is_operational, pN$modeldir, file.path( homedir, "projects", "dynamical_model", "snowcrab", "data" ) ),
+    modeldir= ifelse( run_is_operational, pN$modeldir, file.path( homedir, "projects", "model_fishery", "data" ) ),
     carstm_model_label=carstm_model_label,
     for_julia=TRUE,
     fishery_model_label="turing1"  

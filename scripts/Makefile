@@ -1,6 +1,6 @@
 YR?=2023
 SOURCE := ${PWD}
-# SOURCE?=~/projects/dynamical_model/snowcrab 
+# SOURCE?=~/projects/model_fishery/docs 
 # SOURCE := $(abspath $(lastword $(MAKEFILE_LIST)) )
 MODELTYPE?=size_structured_dde_normalized
 MEDIA?=$(SOURCE)/media
