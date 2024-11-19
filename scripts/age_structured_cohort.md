@@ -22,7 +22,8 @@ To begin, define starting directories and the example data (source: FAO tutorial
 ```julia
 
 using DrWatson
-quickactivate( joinpath("projects", "model_fishery") )
+
+quickactivate( joinpath(homedir(), "projects", "model_fishery") )
  
 # load libs and local functions
 include( scriptsdir( "age_structured_cohort_environment.jl" ))
@@ -31,10 +32,12 @@ include( scriptsdir( "age_structured_cohort_environment.jl" ))
 
 ages, yrs, C, A_yrs, A, body_weight_kg, maturity_ogive = data_baltic_cod_fao()
 
+Cobs = Float64.(C) # used where Integer is not appropriate
+
   #=
     C = catch, numbers at age x year
     A = abundance index, numbers age x year
-    the remaining variables should be self-explanitory 
+    the remaining variables should be self-explanatory 
   =#
 
 
@@ -54,99 +57,154 @@ Cohort Analysis is the core concept of most age-structured methods (attributed t
  
 # dimensions and initial conditions
 na, ny = size(C)
-
-a = 1:(na - 2 )    # age indices for main age groups
-ap = [ na-1, na ]  # age indices of the plus age classes (fixed)
-
-y = 1:(ny-1)      # year indices from 1 to next to last year
-
-# create F0 based on following conditions
-Fyp = repeat([0.55], ny)  # fishing mortality across yr for the plus groups 
-Fat = [ 0.1, 0.2, 0.4, 0.5, 0.5, 0.5, 0.5 ] # Fishing mortality across age for the terminal year
-F0 = fishing_mortality_setup_vpa(na, ny, ap, Fyp, Fat)
+iplus = [na-1, na]  # indices of plus size/age
 
 # guess of natural mortality
-M = repeat([0.2], na)  
+M = 0.2   #  can be a vector or matrix too .. e.g., repeat([0.2], na)  
 
-# re-estimate N from F0 and M 
-N0 = N_setup_vpa(na, ny, ap, C, F0, M)
+# create F based on following conditions
+Fp = repeat([0.5], ny)  # fishing mortality across yr for the plus groups 
+Ft = [ 0.1, 0.2, 0.4, 0.5, 0.5, 0.5, 0.5 ] # Fishing mortality across age for the terminal year
+F = setup_F( Fp, Ft, type="nonseparable", iplus=iplus )
 
-# deterministically back-solve with above starting conditions
-N = cohort_analysis( N0, C, M; Mtype="backward" ) 
+# estimate N from F and M 
+N = setup_N( C, F, M; iplus=iplus )
 
-B, Bmat, Btot, Bssb, pl = compute_biomass( N, body_weight_kg[:,1], maturity_ogive )
+# deterministically (without error processes) back-solve with above starting conditions
+N = cohort_analysis!( N, C, M; iplus=iplus  ) 
+
+F = compute_fishing_mortality!(F, N, M; iplus=iplus)  # update F with finalized N's
+Fall, fsubset, pl = summary_fishing_mortality(F, subset=1:5)
 pl
 
-F, Fi, pl = compute_fishing_mortality(F0, N, M, a; i=1:5)  # update F with finalized N's
+B = N .* body_weight_kg[:,1]
+Bmat, Btot, Bssb, pl = compute_biomass( B, maturity_ogive )
 pl
 
+Cpred = catch_cohort_estimate( N, F, M ) 
 
+  
 ```
 
 ## Virtual Population Analysis (VPA)
 
 VPA's tune Cohort Analysis results by assuming separability of fishing mortality by age and year and estimating these parameters.
 
-Tuning is/was accomplished by least squares or Maximum-likelihood methods (respecting distributional forms of data and parameters). In the basic VPA, fishery independent estimates (A) are tuned to abundance estimates from Cohort Analysis by fitting a catachability coefficient (q) and Fishing mortality estimates of the most recent year (Fyp) and oldest groups (Fat).
+Tuning is/was accomplished by least squares or Maximum-likelihood methods (respecting distributional forms of data and parameters). In the basic VPA, fishery independent estimates (A) are tuned to abundance estimates from Cohort Analysis by fitting a catachability coefficient (q) and Fishing mortality estimates of the most recent year (Fp) and oldest groups (Ft).
  
 Tuning to surveys and other sources of information are called ADAPT and Integrated Catch Analysis. 
 
 Tuning in the reverse direction is called Sequential Population Analysis.
 
+So, approach is to wrap Cohort Analysis with random initial F estimates:
 
 ```julia
 
-commonyears = collect(intersect( yrs, A_yrs))
-yi = findall( x-> x in commonyears, yrs)
-
-# objective function:  add error from CPUE indices
-Ndiff = log.( N[:, yi] ) .- log.( A )
-q0 = q = mean( Ndiff, dims=2 ) # across age  
-objfun = Ndiff .- q
- 
-q0 = vec(q)  # use as prior for Bayesian methods (below)
- 
-```
-
-Wrap the above into a Turing model to flexibly estimate parameters:
-
-```julia
-
-Fyp0 = repeat([0.55], ny)
-Fat0 = [ 0.1, 0.2, 0.4, 0.5, 0.5, 0.5, 0.5 ] 
+Fp0 = repeat([0.5], ny)
+Ft0 = [ 0.1, 0.2, 0.4, 0.5, 0.5, 0.5, 0.5 ] 
  
 Random.seed!(1);
+
+  #=
+    test = rand(arraydist( LogNormal.( log.(Fp0), 0.25) ))
+    test = rand(arraydist( LogNormal.( log.(Ft0), 0.25) ))
+
+    histogram(test)
+  =#
+
 
 Fishing_mortality_assumption = "nonseparable"
 Fishing_mortality_assumption = "separable"
 
-fmod = Virtual_Population_Analysis( Fishing_mortality_assumption, M, C  )  # not exactly a VPA as it is not a recursive form
-fmod = Adaptive_Virtual_Population_Analysis( Fishing_mortality_assumption, M )
-fmod = Integrated_Catch_Analysis( Fishing_mortality_assumption, M, C  )
-fmod = Sequential_Population_Analysis( Fishing_mortality_assumption, M, C  ) # untested
 
-# above instantiates model as fmod: make sure fmod works
-rand(fmod) 
+  #=
+    # implemented models .. add more using the same template
+    fmod = Virtual_Population_Analysis_basic( Fishing_mortality_assumption, M, C , iplus )  # not exactly a classical VPA as Ft and Fp are random effects
+    fmod = Virtual_Population_Analysis( Fishing_mortality_assumption, M, C , iplus ) 
+    fmod = Adaptive_Virtual_Population_Analysis( Fishing_mortality_assumption, M, C , iplus)
+    fmod = Integrated_Catch_Analysis( Fishing_mortality_assumption, M, C , iplus )
+    fmod = Sequential_Population_Analysis( Fishing_mortality_assumption, M, C, iplus  ) # untested
+  =#
+
+
  
-# find estimates (various methods)
-res = optimize(fmod, MLE(), NelderMead(); autodiff = :forward)  # MLE estimate .. does not converge
+# choose approach:
 
-Optim.Options(iterations=100)  # ParticleSwarm does not check for convrgence ... control with Optim.Options(iterations=...)  
-res = optimize(fmod, MAP(), ParticleSwarm() ; autodiff = :forward)  # MAP estimate... not converging ... 
-  
-    # extraction:
-    Fyp_est = [ res.values[Symbol("Fyp[$i]")] for i in 1:ny ]
-    Fat_est = [ res.values[Symbol("Fat[$i]")] for i in 1:na ]
-    q_est = [ res.values[Symbol("q[$i]")] for i in 1:na ] # only in Adaptive_Virtual_Population_Analysis and ica
-    S_est =  [ res.values[Symbol("S[$i, $j]")] for i in 1:na for j in 1:ny ]
-
-    N = reshape( S_est, na, ny )
-
-    B, Bmat, Btot, Bssb, pl = compute_biomass( N, body_weight_kg[:,1], maturity_ogive )
+if approach =="Maximum_likelhood_basic"
+  Optim.Options(iterations=1000)  # change options as required  
+  fmod = Virtual_Population_Analysis_basic( Fishing_mortality_assumption, M, Cobs, iplus )  # not exactly a classical VPA as Ft and Fp are random effects
+  res = optimize(fmod, MLE(), NelderMead())  # alt engines: BFGS(), Newton(), etc .. 
+    Fp_hat = [ res.values[Symbol("Fp[$i]")] for i in 1:ny ]
+    Ft_hat = [ res.values[Symbol("Ft[$i]")] for i in 1:na ]
+    F = setup_F( Fp_hat, Ft_hat, type=Fishing_mortality_assumption, iplus=iplus )
+    N = setup_N( C, F, M; iplus=iplus )
+    N = cohort_analysis!( N, C, M; iplus=iplus  ) 
+    F = compute_fishing_mortality!(F, N, M; iplus=iplus)  # update F with finalized N's
+    Fall, fsubset, pl = summary_fishing_mortality(F, subset=1:5)
     pl
-    
-    F, Fi, pl = compute_fishing_mortality(F0, N, M, a; i=1:2)  # update F with finalized N's
+    B = N .* body_weight_kg[:,1]
+    Bmat, Btot, Bssb, pl = compute_biomass( B, maturity_ogive )
     pl
+    Cpred = catch_cohort_estimate( N, F, M ) # Note some negative predicted catches 
+end
+
+
+if approach =="Maximum_likelhood"
+  Optim.Options(iterations=10000)  # change options as required  
+  fmod = Virtual_Population_Analysis( Fishing_mortality_assumption, M, Cobs, iplus )  # not exactly a classical VPA as Ft and Fp are random effects
+  res = optimize(fmod, MLE(), NelderMead() )  # alt engines: NelderMead(), BFGS(), Newton(), etc .. 
+    # note addition of the data likelihood results in model divergence   
+    Fp_hat = [ res.values[Symbol("Fp[$i]")] for i in 1:ny ]
+    Ft_hat = [ res.values[Symbol("Ft[$i]")] for i in 1:na ]
+    F = setup_F( Fp_hat, Ft_hat, type=Fishing_mortality_assumption, iplus=iplus )
+    N = setup_N( C, F, M; iplus=iplus )
+    N = cohort_analysis!( N, C, M; iplus=iplus  ) 
+    F = compute_fishing_mortality!(F, N, M; iplus=iplus)  # update F with finalized N's
+    Fall, fsubset, pl = summary_fishing_mortality(F, subset=1:5)
+    pl
+    B = N .* body_weight_kg[:,1]
+    Bmat, Btot, Bssb, pl = compute_biomass( B, maturity_ogive )
+    pl
+    Cpred = catch_cohort_estimate( N, F, M ) # Note some negative predicted catches 
+end
+
+
+
+if approach =="Maximum_aposteriori"
+  Optim.Options(iterations=10000)  # change options as required  
+  fmod = Virtual_Population_Analysis( Fishing_mortality_assumption, M, Cobs, iplus )  # not exactly a classical VPA as Ft and Fp are random effects
+  res = optimize(fmod, MAP(), NelderMead() )  # alt engines: NelderMead(), BFGS(), Newton(), etc .. 
+    # note addition of the data likelihood results in model divergence   
+    Fp_hat = [ res.values[Symbol("Fp[$i]")] for i in 1:ny ]
+    Ft_hat = [ res.values[Symbol("Ft[$i]")] for i in 1:na ]
+    F = setup_F( Fp_hat, Ft_hat, type=Fishing_mortality_assumption, iplus=iplus )
+    N = setup_N( C, F, M; iplus=iplus )
+    N = cohort_analysis!( N, C, M; iplus=iplus  ) 
+    F = compute_fishing_mortality!(F, N, M; iplus=iplus)  # update F with finalized N's
+        Fall, fsubset, pl = summary_fishing_mortality(F, subset=1:5)
+    pl
+    B = N .* body_weight_kg[:,1]
+    Bmat, Btot, Bssb, pl = compute_biomass( B, maturity_ogive )
+    pl
+    Cpred = catch_cohort_estimate( N, F, M ) # Note some negative predicted catches 
+end
+
+
+
+q_hat = [ res.values[Symbol("q_hat[$i]")] for i in 1:na ]
+S_hat = [ res.values[Symbol("S[$i, $j]")] for i in 1:na for j in 1:ny ]
+N = reshape( S_hat, na, ny )
+
+F = compute_fishing_mortality!(F, N, M; iplus=iplus)  # update F with finalized N's
+Fall, fsubset, pl = summary_fishing_mortality(F, subset=1:5)
+pl
+
+B = N .* body_weight_kg[:,1]
+Bmat, Btot, Bssb, pl = compute_biomass( B, maturity_ogive )
+pl
+
+Cpred = catch_cohort_estimate( N, F, M ) # Note some negative predicted catches 
+
 
 
 # Generate a Variational Inference estimate...  Not working ? 2024-10-26 
@@ -157,19 +215,24 @@ res = vi(fmod, advi )
 n_samples = 100
 samples = rand(res, n_samples);
 
-    # extraction:
-    Fyp_vi_ = [ res.values[Symbol("Fyp[$i]")] for i in 1:ny ]
-    Fat_vi_ = [ res.values[Symbol("Fat[$i]")] for i in 1:na ]
-    q_vi_ = [ res.values[Symbol("q[$i]")] for i in 1:na ]
-    S_vi_ =  [ res.values[Symbol("S[$i, $j]")] for i in 1:na for j in 1:ny ]
+  # extraction:
+  Fp_hat = [ res.values[Symbol("Fp[$i]")] for i in 1:ny ]
+  Ft_hat = [ res.values[Symbol("Ft[$i]")] for i in 1:na ]
+  q_hat = [ res.values[Symbol("q[$i]")] for i in 1:na ]
+  S_hat =  [ res.values[Symbol("S[$i, $j]")] for i in 1:na for j in 1:ny ]
 
-    N = reshape( S_vi_, na, ny )
+  N = reshape( S_hat, na, ny )
 
-    F, Fi, pl = compute_fishing_mortality(F0, N, M, a; i=1:2)  # update F with finalized N's
-    pl
+  F = compute_fishing_mortality!(F, N, M; iplus=iplus)  # update F with finalized N's
+  Fall, fsubset, pl = summary_fishing_mortality(F, subset=1:5)
+  pl
 
-    B, Bmat, Btot, Bssb, pl = compute_biomass( N, body_weight_kg[:,1], maturity_ogive )
-    pl
+  B = N .* body_weight_kg[:,1]
+  Bmat, Btot, Bssb, pl = compute_biomass( B, maturity_ogive )
+  pl
+
+  Cpred = catch_cohort_estimate( N, F, M ) # Note some negative predicted catches 
+
 
 
 # MCMC 
@@ -201,20 +264,24 @@ res = sample( fmod, turing_sampler,  n_samples   ) # sample in parallel
     k=1:n_samples
     l=1
 
-    Fyp_est = [ res[k, Symbol("Fyp[$i]"), l] for i in 1:ny ]
-    Fat_est = [ res[k, Symbol("Fat[$i]"), l] for i in 1:na ]
-    q_est = [ res[k, Symbol("q[$i]"), l] for i in 1:na ]
-    S_est =  [ res[k, Symbol("S[$i, $j]"), l] for i in 1:na for j in 1:ny ]
+    Fp_hat = [ res[k, Symbol("Fp[$i]"), l] for i in 1:ny ]
+    Ft_hat = [ res[k, Symbol("Ft[$i]"), l] for i in 1:na ]
+    q_hat = [ res[k, Symbol("q[$i]"), l] for i in 1:na ]
+    S_hat =  [ res[k, Symbol("S[$i, $j]"), l] for i in 1:na for j in 1:ny ]
 
-    S = vec( mean( hcat( S_est...), dims=1))
+    S = vec( mean( hcat( S_hat...), dims=1))
 
     N = reshape( S, na, ny )
 
-    B, Bmat, Btot, Bssb, pl = compute_biomass( N, body_weight_kg[:,1], maturity_ogive )
+    F = compute_fishing_mortality!(F, N, M; iplus=iplus)  # update F with finalized N's
+    Fall, fsubset, pl = summary_fishing_mortality(F, subset=1:5)
     pl
 
-    F, Fi, pl = compute_fishing_mortality(F0, N, M, a; i=1:2)  # update F with finalized N's
+    B = N .* body_weight_kg[:,1]
+    Bmat, Btot, Bssb, pl = compute_biomass( B, maturity_ogive )
     pl
+
+    Cpred = catch_cohort_estimate( N, F, M ) # Note some negative predicted catches 
 
    
 

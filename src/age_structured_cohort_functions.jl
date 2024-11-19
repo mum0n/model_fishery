@@ -104,145 +104,289 @@ end
 
 
 
-function fishing_mortality_setup_vpa(na, ny, ap, Fyp, Fat; type="nonseparable", datatype="Turing"  )
+function setup_F( Fp, Ft; type="nonseparable", iplus=na )
   # starting assumption for terminal year and oldest age groups
-  if datatype=="Turing" 
-    F = tzeros( na, ny )   
-  else 
-    F = zeros(  na, ny )   
-  end
-
+  na, ny = size(C)
+  F = tzeros( na, ny )   
   if type == "nonseparable"
-    for i in ap  # age indices of the plus age classes (fixed)
-      F[ i, :] .= Fyp  # by year in plus groups
+    for i in iplus  # age indices of the plus age classes  
+      F[ i, :] .= Fp  # by year in plus groups
     end
-    F[ :, ny ]  = Fat   # by age in last year
+    F[ :, ny ]  = Ft   # by age in last/terminal year
   elseif type == "separable"  # ie.  multplicative
-    F = Fat * Fyp'
+    F = Ft * Fp'
   end
   return F
 end
 
 
-function N_setup_vpa(na, ny, ap, C, F, M; datatype="Turing" )
+
+function setup_N( C, F, M; iplus=na )
   # starting assumption for terminal year and oldest age groups
   # fill data with terminal years and ages
   na, ny = size(C)
-  if datatype=="Turing" 
-    N = tzeros( na, ny )   
-  else 
-    N = zeros(  na, ny )   
+  N = tzeros( na, ny )   # same aszeros but for Turing 
+   
+  Mdim = length(size(M))
+  if Mdim==0
+
+    for i in iplus  # age indices of the plus age classes  
+      N[i,:] .=  C[i,:] ./ (F[i,:] ./ (F[i,:] .+ M) .* (1.0 .- exp.( .-(F[i,:] .+ M) )))
+    end
+    N[:, ny] = C[:,ny] ./ (F[:,ny] ./ (F[:,ny] .+ M) .* (1.0 .- exp.( -(F[:,ny] .+ M) )) )
+ 
+  elseif Mdim==1 
+
+    for i in iplus  # age indices of the plus age classes  
+      N[i,:] .=  C[i,:] ./ (F[i,:] ./ (F[i,:] .+ M[i]) .* (1.0 .- exp.( .-(F[i,:] .+ M[i]) )))
+    end
+    N[:, ny] = C[:,ny] ./ (F[:,ny] ./ (F[:,ny] .+ M) .* (1.0 .- exp.( -(F[:,ny] .+ M) )) )
+  
+  elseif Mdim==2
+ 
+    for i in iplus  # age indices of the plus age classes  
+      N[i,:] .=  C[i,:] ./ (F[i,:] ./ (F[i,:] .+ M[i]) .* (1.0 .- exp.( .-(F[i,:] .+ M[i,:]) )))
+    end
+    N[:, ny] = C[:,ny] ./ (F[:,ny] ./ (F[:,ny] .+ M) .* (1.0 .- exp.( -(F[:,ny] .+ M[:,ny]) )) )
+  
   end
-  N[ap ,:] = C[ap,:] ./ (F[ap,:] ./ (F[ap,:] .+ M[ap]) .* (1.0 .- exp.( .-(F[ap,:] .+ M[ap]) )))
-  N[:, ny] = C[:,ny] ./ (F[:,ny] ./ (F[:,ny] .+ M) .* (1.0 .- exp.( -(F[:,ny] .+ M) )) )
+
   return N
 end
 
 
 
-function compute_fishing_mortality(F, N, M, a; i=1)
+function compute_fishing_mortality!(F, N, M; iplus=na)
   na, ny = size(N)
-  y = 1:(ny-1)      # year indices from 1 to next to last year
-  F[a, y] = log.( N[a, y] ./  N[a.+1, y.+1]) .- M[a] # update F estimates after convergence
-  Fi = 1.0 .- exp.(- mean( F[i,:], dims=1 ) )
-  pl = plot( collect(yrs), vec(Fi) )
-  return F, Fi, pl
+  
+  Mdim = length(size(M))
+  i_ages = reverse(setdiff( 1:na, iplus ) )
+
+  ia = findall( x -> x < 0 || !isfinite(x), N )
+  if length(ia) > 0
+    N[ia] .= 1.0  # on log scale this becomes 0 .. continue but discourage
+  end
+
+  if Mdim==0
+    for i in i_ages
+      for j in 1:(ny-1)
+        F[i,j] = log( N[i,j] /  N[i+1, j+1]) - M # update F estimates after convergence
+      end
+    end
+  elseif Mdim==1 
+    for i in i_ages
+      for j in 1:(ny-1)
+        F[i,j] = log( N[i,j] /  N[i+1, j+1]) - M[i] # update F estimates after convergence
+      end
+    end
+  elseif Mdim==2
+    for i in i_ages
+      for j in 1:(ny-1)
+        F[i,j] = log( N[i,j] /  N[i+1, j+1]) - M[i,j] # update F estimates after convergence
+      end
+    end
+  end
+  
+  ib = findall( x -> x < 0 || !isfinite(x), F )
+  if length(ib) > 0
+    F[ib] .= 0.0  # on log scale this becomes 0 .. continue but discourage
+  end
+
+  return F
+
 end
 
 
-function compute_biomass( N, w, maturity_ogive )
-  B = N .* w # use average weight from catches
+function summary_fishing_mortality(F; subset=1)
+
+  Fall =  1.0 .- exp.(- mean( F, dims=1 ) ) 
+  Fsubset = 1.0 .- exp.(- mean( F[subset,:], dims=1 ) )  # subset
+  pl = plot( collect(yrs), vec(Fall), label="Mean" )
+  pl = plot( pl, collect(yrs), vec(Fsubset), label="Subset" )
+  return Fall, Fsubset, pl
+
+end
+
+
+function compute_biomass( B, maturity_ogive ) 
   Bmat  = B .* maturity_ogive
   Btot = sum( B, dims=1 )
-  Bssb = sum( Bmat,  dims=1 )  
-  pl = plot( collect(yrs), vec(Btot) )
-  pl = plot!( pl, collect(yrs), vec(Bssb) ) 
-  return B, Bmat, Btot, Bssb, pl
+  Bssb = sum( Bmat, dims=1 )  
+  pl = plot( collect(yrs), vec(Btot), label="Total" )
+  pl = plot!( pl, collect(yrs), vec(Bssb), label="SSB" ) 
+  return Bmat, Btot, Bssb, pl
 end
 
 
-function cohort_analysis( N, C, M; Mtype="backward_pope" ) 
+function cohort_analysis!( N, C, M; iplus=na ) 
 
   # back-propagate numbers of oldest groups based upon assumed natural and computed fishing mortalties 
   na, ny = size(C)
-  a = 1:(na-1)    # age indices for main age groups
-  y = 1:(ny-1)      # year indices from 1 to next to last year
+  Mdim = length(size(M))
 
-  # iteratively fill in the matrix from older and later years  
-  if Mtype == "backward_pope" 
-    # M discriminates only age (marginal)  # standard FAO
-    for i in 1:(na-1)
+  # iteratively fill in the matrix from older and later years
+  # $N_{t} = N_{t+1} \; e^M + C_t \; e^{M/2}$     "Pope's" approximation
+  i_ages = reverse(setdiff( 1:na, iplus ))
+
+  if Mdim==0
+    for i in i_ages
       for j in 1:(ny-1)
-        N[i,j] = N[i+1, j+1] * exp(M[i]) + C[i,j] * exp.(M[i] / 2)  
+        N[i,j] = N[i+1, j+1] * exp(M) + C[i,j] * exp(M / 2)  
+      end
+    end
+  elseif Mdim==1 
+    for i in i_ages
+      for j in 1:(ny-1)
+        N[i,j] = N[i+1, j+1] * exp(M[i]) + C[i,j] * exp(M[i] / 2)  
+      end
+    end
+
+  elseif Mdim==2
+    for i in i_ages
+      for j in 1:(ny-1)
+        N[i,j] = N[i+1, j+1] * exp(M[i,j]) + C[i,j] * exp(M[i,j] / 2)  
       end
     end
   end
-
-  if Mtype == "forward_pope"
-    for i in na:2
-    for j in ny:2
-      N[i,j] = N[i-1,j-1] * exp(-M[i-1]) - C[i-1, j-1] * exp(-0.5*M[i-1]) 
-    end
-    end
-  end
-
-  if Mtype == "marginal_form" 
-    # M discriminates only age (marginal)
-    for _ in 1:na
-      N[a,y] .= N[a.+1, y.+1] .* exp.(M[a]) .+ C[a,y] .* exp.(M[a] ./ 2)  
-    end
-  end
-
-  if Mtype == "age_year_pope" 
-    # M discriminates year and age
-    for i in na:2
-      for j in ny:2
-        N[i-1,j-1] .= N[i,j] .* exp.(M[i,j]) .+ C[i,j] .* exp.(M[i,j] ./ 2)  
-      end
-    end
-  end
-
-  if Mtype == "age_year_forward_pope"
-    for i in na:2
-    for j in ny:2
-      N[i,j] = N[i-1,j-1] * exp(-M[i-1, j-1]) - C[i-1, j-1] * exp(-0.5*M[i-1,j-1]) 
-    end
-    end
-  end
-
+  
   return N
 end
 
 
 
-Turing.@model function Virtual_Population_Analysis( Ftype="separable", M = repeat([0.2], na), C=C )  
-Fyp ~ arraydist( LogNormal.( log.(Fyp0), 0.25) ) 
-Fat ~ arraydist( LogNormal.( log.(Fat0), 0.25) ) 
-F = fishing_mortality_setup_vpa(na, ny, ap, Fyp, Fat; type=Ftype) 
-N0 = N_setup_vpa(na, ny, ap, C, F, M) 
-N = cohort_analysis( N0, C, M ) 
-F[a, y] = log.( N[a, y] ./  N[a.+1, y.+1]) .- M[a] # update F estimates after convergence
-Cpred =  F ./ ( F .+ M ) .* N .* (1.0 .- exp.(- (F .- M) ) )
-# Cpred can be negative ... screen them out 
-ia = findall( x -> x <= 0, Cpred )
-if length(ia) > 0
-  Cpred[ia] .= 1  # on log ascale this becomes 0 
-#  Turing.@addlogprob! -Inf
-#   return nothing
+function catch_cohort_estimate( N, F, M ) 
+
+  # back-propagate numbers of oldest groups based upon assumed natural and computed fishing mortalties 
+  na, ny = size(C)
+  Mdim = length(size(M))
+
+  Cpred = tzeros(na,ny) 
+  
+  if Mdim==0
+    for i in 1:na
+      for j in 1:ny
+        Cpred[i,j] = F[i,j] ./ ( F[i,j] .+ M ) .* N[i,j] .* (1.0 .- exp.(- (F[i,j] .- M) ) )
+      end
+    end
+  elseif Mdim==1 
+    for i in 1:na
+      for j in 1:ny
+        Cpred[i,j] = F[i,j] ./ ( F[i,j] .+ M[i] ) .* N[i,j] .* (1.0 .- exp.(- (F[i,j] .- M[i]) ) )
+      end
+    end
+
+  elseif Mdim==2
+    for i in 1:na
+      for j in 1:ny
+        Cpred[i,j] = F[i,j] ./ ( F[i,j] .+ M[i,j] ) .* N[i,j] .* (1.0 .- exp.(- (F[i,j] .- M[i,j]) ) )  
+      end
+    end
+  end
+
+  ia = findall( x -> x < 0 || !isfinite(x), Cpred )
+  
+  if length(ia) > 0
+    Cpred[ia] .= 0.0  # on log scale this becomes 0 .. continue but discourage
+  end
+
+  return Cpred
+
 end
 
-# due to negative values, simply using a "Poisson"  
-C ~ arraydist( LogNormal.( log.(Cpred), 0.25) )  # # likelihood .. Broadcast not working?
-S ~ arraydist( LogNormal.( log.(N) , 0.25 ) )  # force a sample for all data to be kept
+
+
+function catchability_cohort_estimate( N, C ) 
+ 
+  na, ny = size(N)
+  Q = dQ = tzeros(na,ny)
+
+  Q = N ./ C  # catchability
+  ia = findall( x -> x >= 0 && isfinite(x), Q )
+  ib = findall( x -> x < 0 || !isfinite(x), Q )
+  
+  if length(ib) > 0
+    Q[ib] .= 1.0  # on log scale this becomes 0 .. continue but discourage
+  end
+  Q = log.(Q)
+  
+  q = tzeros(na)
+  for k in 1:na
+    j = findall( x -> x >= 0 && isfinite(x), Q[k,:] )
+    q[k] = mean( Q[k,j] )  # across age
+  end
+  dQ = Q .- q
+  sumdQ = sum( dQ[ia] )  
+  return sumdQ, q, ia
+
 end
 
 
-Turing.@model function Adaptive_Virtual_Population_Analysis( Ftype="separable", M = repeat([0.2], na) ) 
-  Fyp ~ arraydist( LogNormal.( log.(Fyp0), 0.25) ) 
-  Fat ~ arraydist( LogNormal.( log.(Fat0), 0.25) ) 
-  F = fishing_mortality_setup_vpa(na, ny, ap, Fyp, Fat; type=Ftype)
-  N0 = N_setup_vpa(na, ny, ap, C, F, M) 
-  N = cohort_analysis( N0, C, M ) 
+
+Turing.@model function Virtual_Population_Analysis_basic( 
+  Ftype="separable", M = repeat([0.2], na), Cobs=Cobs, iplus=na, ::Type{T} = Float64 ) where T
+
+  Fp ~ arraydist( LogNormal.( log.(Fp0), 0.25) ) 
+  Ft ~ arraydist( LogNormal.( log.(Ft0), 0.25) ) 
+  Fs = setup_F( Fp, Ft; type=Ftype, iplus=iplus ) 
+  Ns = setup_N( Cobs, Fs, M; iplus=iplus ) 
+  Ns = cohort_analysis!( Ns, Cobs, M; iplus=iplus  ) 
+  Fs = compute_fishing_mortality!(Fs, Ns, M; iplus=iplus )  # update F with finalized N's
+  
+  j = findall( x -> x <= 0, Fs )
+  
+  if length(j) > 0
+    Fs[j] .= 0.001
+    Turing.@addlogprob! -Inf
+  end
+
+  Cpred = catch_cohort_estimate( Ns, Fs, M ) 
+ 
+  sumdQ, q, _ = catchability_cohort_estimate( Ns, Cpred ) 
+  sumdQ ~ Normal(0.0, 0.001 * T(na*ny) );  # equivalent to mean(dQ) ~ normal(0, 0.001)
+
+  # at present saving a result is not possible unless it is sampled
+  S ~ arraydist( Normal.( Ns, 0.0001 ) )  # force a sample for all data to be kept
+end
+
+
+
+Turing.@model function Virtual_Population_Analysis( 
+  Ftype="separable", M = repeat([0.2], na), Cobs=Cobs, iplus=na, ::Type{T} = Float64 ) where T
+  Fp ~ arraydist( LogNormal.( log.(Fp0), 0.25) ) 
+  Ft ~ arraydist( LogNormal.( log.(Ft0), 0.25) ) 
+  Fs = setup_F( Fp, Ft; type=Ftype, iplus=iplus ) 
+  Ns = T.(setup_N( Cobs, Fs, M; iplus=iplus ))  
+  Ns = cohort_analysis!( Ns, Cobs, M; iplus=iplus  ) 
+  Fs = compute_fishing_mortality!(Fs, Ns, M; iplus=iplus )  # update F with finalized N's
+  
+  j = findall( x -> x <= 0, Fs )
+  
+  if length(j) > 0
+    Fs[j] .= 0.001
+    Turing.@addlogprob! -Inf
+  end
+
+  Cpred = catch_cohort_estimate( Ns, Fs, M ) 
+ 
+  sumdQ, q, ia = catchability_cohort_estimate( Ns, Cpred ) 
+  sumdQ ~ Normal(0.0, 0.001 * T(na*ny) );  # equivalent to mean(dQ) ~ normal(0, 0.001)
+
+  # at present saving a result is not possible unless it is sampled
+  S ~ arraydist( Normal.( Ns, 0.0001 ) )  # force a sample for all data to be kept
+  
+  # the followng is an additional likelihood relative to the smple VPA form: 
+  # due to negative values, simply using a "Poisson"  is more justified
+  Cobs[ia] ~ arraydist( LogNormal.( log.(Cpred[ia]), 0.25) )  # # likelihood .. Broadcast not working?
+end
+
+
+
+Turing.@model function Adaptive_Virtual_Population_Analysis( Ftype="separable", M = repeat([0.2], na), iplus=na ) 
+  Fp ~ arraydist( LogNormal.( log.(Fp0), 0.25) ) 
+  Ft ~ arraydist( LogNormal.( log.(Ft0), 0.25) ) 
+  F = setup_F( Fp, Ft; type=Ftype, iplus=iplus ) 
+  N = setup_N( C, F, M; iplus=iplus ) 
+  N = cohort_analysis!( N, C, M; iplus=iplus  ) 
   q ~ arraydist( LogNormal.( log.(q0), 0.25) ) 
   mu = log.(q .* N) 
   muyi = view( mu, :, yi ) # overlapping subset
@@ -252,20 +396,20 @@ end
 
 
 
-Turing.@model function Integrated_Catch_Analysis( Ftype="separable", M = repeat([0.2], na), C=C ) 
-Fyp ~ arraydist( LogNormal.( log.(Fyp0), 0.25) ) 
-Fat ~ arraydist( LogNormal.( log.(Fat0), 0.25) ) 
-F = fishing_mortality_setup_vpa(na, ny, ap, Fyp, Fat; type=Ftype)
-N0 = N_setup_vpa(na, ny, ap, C, F, M) 
-N = cohort_analysis( N0, C, M ) 
-F[a, y] = log.( N[a, y] ./  N[a.+1, y.+1]) .- M[a] # update F estimates after convergence
-Cpred =  F ./ ( F .+ M ) .* N .* (1.0 .- exp.(- (F .- M) ) )
-C ~ arraydist( LogNormal.( Cpred, 0.25 ) )  # # likelihood .. Broadcast not working?
-q ~ arraydist( LogNormal.( log.(q0), 0.25) ) 
-mu = log.(q .* N) 
-muyi = view( mu, :, yi ) # overlapping subset
-A ~ arraydist( LogNormal.( muyi, 0.25 ) )  # # likelihood .. Broadcast not working?
-S ~ arraydist( LogNormal.( mu , 0.25 ) )  # force a sample for all data to be kept
+Turing.@model function Integrated_Catch_Analysis( Ftype="separable", M = repeat([0.2], na), C=C, iplus=na ) 
+  Fp ~ arraydist( LogNormal.( log.(Fp0), 0.25) ) 
+  Ft ~ arraydist( LogNormal.( log.(Ft0), 0.25) ) 
+  F = setup_F( Fp, Ft; type=Ftype, iplus=iplus ) 
+  N = setup_N( C, F, M; iplus=iplus ) 
+  N = cohort_analysis!( N, C, M; iplus=iplus  ) 
+  F[a, y] = log.( N[a, y] ./  N[a.+1, y.+1]) .- M[a] # update F estimates after convergence
+  Cpred =  F ./ ( F .+ M ) .* N .* (1.0 .- exp.(- (F .- M) ) )
+  C ~ arraydist( LogNormal.( Cpred, 0.25 ) )  # # likelihood .. Broadcast not working?
+  q ~ arraydist( LogNormal.( log.(q0), 0.25) ) 
+  mu = log.(q .* N) 
+  muyi = view( mu, :, yi ) # overlapping subset
+  A ~ arraydist( LogNormal.( muyi, 0.25 ) )  # # likelihood .. Broadcast not working?
+  S ~ arraydist( LogNormal.( mu , 0.25 ) )  # force a sample for all data to be kept
 end
 
 
@@ -313,7 +457,8 @@ Turing.@model function sequential_population_analysis()
   end
   
   # Cohort equation (starts with young in earliest time period (unlike traditional VPA)
-  N = cohort_analysis( exp(LogN), C, M; Mtype="forward" ) 
+  N = exp(LogN)
+  N = cohort_analysis!( N, C, M; Mtype="forward" ) 
   logN = log.(maximum.(N, 10))
   
   # Prior on q's# 

@@ -113,9 +113,15 @@ Reference:
  
 Estimation has been attempted by various methods:
 
-  - equilibrium assumptions (unstable)
-  - regression (Schnute 1977; erratic) 
-  - observation error or "time-series method" (aka, state space models) Hilborn & Walters (1992) - Chapter 8
+    - equilibrium assumptions (unstable): example
+
+    - regression (Schnute 1977; erratic)
+    
+        - log( O[t+1]/O[t] ) = 4 * m / K - 4 * m / (q *K^2) *(O[t] +O[t+1])/2 - q*( C[t]/O[t] ); O=observed biomass (index)
+
+    - observation error or "time-series method" (aka, state space models) Hilborn & Walters (1992) - Chapter 8
+
+        - O ~ q B 
 
 All approaches have issues with stability, especially when used with least-squares or unconditioned Maximum Likelihood methods.
 
