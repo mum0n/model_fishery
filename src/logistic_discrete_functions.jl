@@ -2,212 +2,6 @@
 
 
 
-function logistic_discrete_data( yrs, aulab, fishery_data, model_variation )
- 
-  Y = fishery_data["Y"][∈(yrs).(fishery_data["Y"].yrs), :]
-  removals = fishery_data["L"][∈(yrs).(fishery_data["L"].yrs), :]
-  Kmu = [5.0, 65.0, 1.5]
-  nT = length(yrs)
-  nP = 5  # number of predictions into future (with no fishing)
-  nM = nP + nT  # total number of prediction years
-
-  dt = 1  # time resolution of solutions .. discrete annual so 1 year
-  nS = 1 # no state variables, not used 
-
-  no_digits = 3  # time floating point rounding 
-  smallnumber = 1.0e-9 # floating point value sufficient to assume 0 valued
-  
-  # "survey index"
-  S = Y[:,Symbol("$aulab"  )]
-
-  # scale index where required
-  Smean = mean(skipmissing(S))
-  Sstd = std( skipmissing(S))
-  Smin = minimum(skipmissing(S))
-  Smax = maximum( skipmissing(S))
-  Srange = Smax - Smin 
-
-  SminFraction = Smin ./ Srange  # used as informative prior mean in some runs
-
-  if model_variation=="logistic_discrete_historical"
-  # do nothing (no scaling)
-  elseif occursin( r"scale_center", model_variation ) 
-  S = (S .- Smean ) ./ Sstd  # scale to std and center to 0 
-  else 
-  S = (S .- Smin ) ./ Srange    # default is to scale (min,max) -> (0,1)
-  end
-
-
-  # id index
-  ki = aulab=="cfanorth" ? 1 :
-      aulab=="cfasouth" ? 2 :
-      aulab=="cfa4x"    ? 3 :
-      0  # default
-
-  kmu = Kmu[ki]  
-
-  smallnumber = 1.0 / kmu / 10.0  # floating point value of sufficient to assume 0 valued
-  no_digits = 3  # time floating point rounding
-
-  survey_time = Y[:,:yrs]    # time of observations for survey .. for plotting
-  # adjust survey time to be approximately in spring or autumn
-  spring = findall( x -> x < 2004, survey_time )
-  fall   = findall( x -> x >= 2004, survey_time )
-  survey_time[spring] = survey_time[spring] .+ 5.0/12.0  # arbitrary ..  "spring"
-  survey_time[fall]   = survey_time[fall] .+ 10.0/12.0   # time of survey in "fall" 
-  survey_time =  round.(  survey_time ; digits=no_digits)    # time of observations for survey
-
-  removed = removals[:,Symbol("$aulab")]
-
-  predtime =  4.0/12.0  # predictions ("m") are "prefishery" .. arbitrarily setting to 4/12
-  prediction_time = floor.( vcat( collect(minimum(yrs) : (maximum(yrs)+nP) ) )  ) .+  round( predtime/dt ; digits=no_digits)   # april (m== prefishery)
-  # prediction_time = floor.(vcat( survey_time, collect(1:nP) .+ maximum(survey_time) ) )     
-  yrs_pred_report = findall( x -> (x >= 1999.0) & (x <= (Real(maximum(yrs))+1.0)), prediction_time )
-  prediction_time_ss = prediction_time[yrs_pred_report]
-
-  iok = findall( !ismissing, S )
-
-  # basic params for "logistic_discrete"
-  PM = (
-      yrs = yrs,
-      nS = nS, 
-      nT = length(yrs),
-      nP = nP,  # number of predictions into future (with no fishing)
-      nM = nM,  # total number of prediction years
-      kmu = kmu,
-      K = (kmu, 0.25*kmu, kmu/5.0, kmu*5.0 ),
-      r = (1.0, 0.1, 0.5, 1.5),
-      bpsd = ( 0.1, 0.05, 0.01, 0.5 ),
-      bosd = ( 0.1, 0.05, 0.01, 0.5 ),
-      q1 = (  1.0, 0.2,  0.01, 10.0 ),
-      q0 = ( SminFraction, 0.1, -1.0, 1.0 ),
-      m0 = ( 0.9, 0.2, 0.1, 1.0), 
-      mlim =(0.0, 1.0),
-      removed=removed,
-      S = S,
-      iok = iok,
-      yeartransition = 0
-  ) 
-
-  # translate model-specific functions, etc to generics
-  if model_variation=="logistic_discrete_historical"
-
-    if (aulab=="cfanorth")  
-        PM = @set PM.yeartransition = 6
-        PM = @set PM.K = PM.kmu .* (1.0, 0.1, 1.0/5.0, 5.0 )
-        PM = @set PM.r = (1.0, 0.1, 0.25, 3.0)
-        PM = @set PM.bpsd = ( 0.1, 0.1, 0.01, 0.5 )
-        PM = @set PM.bosd = PM.kmu .* ( 0.1, 0.1, 0.01, 0.75 )
-        PM = @set PM.q1 = ( 1.0, 0.1, 0.01, 2.0 )
-        PM = @set PM.mlim =( 0.01, 1.25 )
-        PM = @set PM.m0 = (0.5, 0.25, 0.0, 1.25 )
-    end
-
-    if (aulab=="cfasouth")
-        PM = @set PM.yeartransition = 6
-        PM = @set PM.K = PM.kmu .* (1.0, 0.1, 1.0/5.0, 5.0 )
-        PM = @set PM.r = (1.0, 0.1, 0.25, 3.0)
-        PM = @set PM.bpsd = ( 0.1, 0.1, 0.01, 0.5 )
-        PM = @set PM.bosd = PM.kmu .* ( 0.1, 0.1, 0.01, 0.75 )
-        PM = @set PM.q1 = ( 1.0, 0.1, 0.01, 2.0 )
-        PM = @set PM.mlim =( 0.01, 1.25 )
-        PM = @set PM.m0 = (0.5, 0.25, 0.0, 1.25 )
-     end
-
-    if (aulab=="cfa4x")  
-        PM = @set PM.yeartransition = 0
-        PM = @set PM.K = PM.kmu .* (1.0, 0.1, 1.0/5.0, 5.0 )
-        PM = @set PM.r = (1.0, 0.1, 0.25, 3.0)
-        PM = @set PM.bpsd = ( 0.1, 0.1, 0.01, 0.5 )
-        PM = @set PM.bosd = PM.kmu .* ( 0.1, 0.1, 0.01, 0.75 )
-        PM = @set PM.q1 = ( 1.0, 0.1, 0.01, 2.0 )
-        PM = @set PM.mlim =( 0.01, 1.25 )
-        PM = @set PM.m0 = (0.5, 0.25, 0.0, 1.25 )
-     end
- 
-  elseif model_variation=="logistic_discrete_basic"
-  # same as historical but normalize to reduce influce of large magnitudes and faster convergence
-
-      if (aulab=="cfanorth")  
-          PM = @set PM.yeartransition = 6
-          PM = @set PM.K = (PM.kmu, 0.25*PM.kmu, PM.kmu/5.0, PM.kmu*5.0 )
-          PM = @set PM.r = (1.0, 0.1, 0.25, 3.0)
-          PM = @set PM.bpsd = ( 0.1, 0.1, 0.01, 0.5 )
-          PM = @set PM.bosd = ( 0.1, 0.1, 0.01, 0.75 )
-          PM = @set PM.q1 = (  1.0, 0.1,  0.25, 1.25 )
-          PM = @set PM.mlim =( 0.1, 1.25 )
-          PM = @set PM.m0 = ( 0.9, 0.2, 0.2, 1.25)
-      end
-
-      if (aulab=="cfasouth")
-          PM = @set PM.yeartransition = 6
-          PM = @set PM.K = (PM.kmu, 0.25*PM.kmu, PM.kmu/5.0, PM.kmu*5.0 )
-          PM = @set PM.r = (1.0, 0.1, 0.25, 3.0)
-          PM = @set PM.bpsd = ( 0.1, 0.1, 0.001, 0.5 )
-          PM = @set PM.bosd = ( 0.1, 0.1, 0.001, 0.75 )
-          PM = @set PM.q1 = (  1.0, 0.1,  0.25, 1.25 )
-          PM = @set PM.mlim =( 0.2, 1.25 )
-          PM = @set PM.m0 = ( 0.5, 0.2, 0.0, 1.25)
-      end
-
-      if (aulab=="cfa4x")  
-
-          PM = @set PM.yeartransition = 0
-          PM = @set PM.K = (PM.kmu, 0.2*PM.kmu, PM.kmu/5.0, PM.kmu*5.0 )
-          PM = @set PM.r = (1.0, 0.2, 0.25, 3.0)
-          PM = @set PM.bpsd = ( 0.1, 0.1, 0.001, 0.5 )
-          PM = @set PM.bosd = ( 0.1, 0.1, 0.001, 0.75 )
-          PM = @set PM.q1 = ( 1.0, 0.2, 0.25, 1.25 )
-          PM = @set PM.mlim =( 0.1, 1.25 )
-          PM = @set PM.m0 = ( 0.5, 0.2, 0.25, 1.25)
-      end
- 
-  elseif model_variation=="logistic_discrete"
-
-      if (aulab=="cfanorth") | (aulab=="cfasouth")
-          PM = @set PM.yeartransition = 6
-      end
- 
-  elseif model_variation=="logistic_discrete_map"
-
-      # not used .. just for testing
-      if (aulab=="cfanorth") | (aulab=="cfasouth")
-          PM = @set PM.yeartransition = 6
-      end
-      PM = @set PM.K = (PM.kmu, 0.2*PM.kmu, PM.kmu/5.0, PM.kmu*5.0 )
-      PM = @set PM.r = (1.0, 0.1, 0.5, 3.0)
-      PM = @set PM.bpsd = (0, 0.05, 0.01, 0.5) 
-      PM = @set PM.bosd = (0, 0.05, 0.01, 0.75)
-      PM = @set PM.q1 = (1.0, 0.1,  0.01, 10.0)
-      PM = @set PM.q0 = (0.0, 0.1, -1.0, 1.0)
-   end
- 
-  # translate model-specific functions, etc to generics
-  if model_variation=="logistic_discrete_historical"
-
-    fmod = logistic_discrete_turing_historical(PM)  # q1 only
-
-  elseif model_variation=="logistic_discrete_basic"
-  # same as historical but normalize to reduce influce of large magnitudes and faster convergence
-
-    fmod = logistic_discrete_turing_basic(PM)
-
-  elseif model_variation=="logistic_discrete"
-
-    fmod =  logistic_discrete_turing(PM)
-
-  elseif model_variation=="logistic_discrete_map"
-
-      # not used .. just for testing
-      fmod = logistic_discrete_map_turing(PM)
-  end
- 
-  return PM, fmod
-end
-
- 
-
-
 Turing.@model function logistic_discrete_turing( PM )
   # biomass process model: dn/dt = r n (1-n/K) - removed ; b, removed are not normalized by K  
 
@@ -355,7 +149,7 @@ Turing.@model function logistic_discrete_turing_historical( PM )
   if PM.yeartransition == 0
     # 4X
     for i in PM.iok
-      PM.S[i] ~ Normal(  (K * m[i] - PM.removed[i]) / q1, bosd )  ; # fall survey
+      PM.S[i] ~ Normal(  (K * m[i] - PM.removed[i]) / q1, K*bosd )  ; # fall survey
     end
 
   else
@@ -366,11 +160,11 @@ Turing.@model function logistic_discrete_turing_historical( PM )
     
     for i in PM.iok
       if  i < PM.yeartransition
-        PM.S[i] ~ Normal(  K * m[i] / q1, bosd )  ;  # spring survey
+        PM.S[i] ~ Normal(  K * m[i] / q1, K*bosd )  ;  # spring survey
       elseif i == PM.yeartransition
-        PM.S[i] ~ Normal(  ( K * m[i] - (PM.removed[i-1] + PM.removed[i]) / 2.0) / q1, bosd )  ;  # transition year  .. averaging should be done before .. less computation 
+        PM.S[i] ~ Normal(  ( K * m[i] - (PM.removed[i-1] + PM.removed[i]) / 2.0) / q1, K*bosd )  ;  # transition year  .. averaging should be done before .. less computation 
       else
-        PM.S[i] ~ Normal(  ( K * m[i] - PM.removed[i] ) / q1 , bosd )  ; # fall survey
+        PM.S[i] ~ Normal(  ( K * m[i] - PM.removed[i] ) / q1 , K*bosd )  ; # fall survey
       end
     end
   end
@@ -604,7 +398,7 @@ end
 # -----------
 
 
-function abundance_from_index( Sai, res, model_variation="logistic_discrete_historical" )
+function abundance_from_index( Sai, res; model_variation="logistic_discrete_historical" )
   # map S <=> m  where S = observation index on unit scale; m = latent, scaled abundance on unit scale
   # observation model: S = (m - q0)/ q1   <=>   m = S * q1 + q0  
 
@@ -675,10 +469,8 @@ function fishery_model_plot(; toplot=("fishing", "survey"), n_sample=min(250, si
    
 
   if any(isequal.("survey", toplot))  
-    # map S -> m and then multiply by K
-    # where S=observation on unit scale; m=latent, scaled abundance on unit scale
-    S_m = abundance_from_index( S, res  )
-    S_K = mean(S_m, dims=2)  # average by year
+    S_m = abundance_from_index( S, res; model_variation=model_variation )
+    S_K = mean( S_m, dims=2 )  # average by year
     pl = plot!(pl, survey_time, S_K, color=:gray, lw=2 )
     pl = scatter!(pl, survey_time, S_K, markersize=4, color=:darkgray)
     pl = plot!(pl; legend=false )
@@ -690,7 +482,7 @@ function fishery_model_plot(; toplot=("fishing", "survey"), n_sample=min(250, si
   if any(isequal.("fishing_mortality", toplot))  
     FMmean = mean( FM, dims=2)
     FMmean[isnan.(FMmean)] .= zero(eltype(FM))
-    ub = maximum(FMmean) * 1.1
+    ub = maximum(FMmean) * 1.05
     pl = plot!(pl, prediction_time_ss, FM[:,ss] ;  alpha=0.02, color=:lightslateblue)
     pl = plot!(pl, prediction_time_ss, FMmean ;  alpha=0.8, color=:slateblue, lw=4)
     pl = plot!(pl, ylim=(0, ub ) )
@@ -763,8 +555,7 @@ function fishery_model_plot(; toplot=("fishing", "survey"), n_sample=min(250, si
       series_annotations = text.(trunc.(Int, prediction_time_ss), :top, :left, pointsize=8) )
 
     ub = max( quantile(K, 0.75), maximum( fb_mean ), maximum(fmsy) ) * 1.05
-    pl = plot!(pl; legend=false, xlim=(0, ub ), ylim=(0, maximum(fm_mean ) * 1.05  ) )
-    # TODO # add predictions ???
+    pl = plot!(pl; legend=false, xlim=(0, ub ), ylim=(0, quantile(fmsy, 0.975)    ) )
   
   end
    
@@ -784,7 +575,7 @@ function fishery_model_plot(; toplot=("fishing", "survey"), n_sample=min(250, si
 
     nt = length(survey_time)
     colours = get(ColorSchemes.tab20c, 1:nt, :extrema )[rand(1:(nt-1), (nt-1) )]
-    pl = scatter!(pl, b0, b1;  alpha=0.2, color=colours, markersize=2.5, markerstrokewidth=0)
+    pl = scatter!(pl, b0, b1; legend=false, alpha=0.2, color=colours, markersize=2.5, markerstrokewidth=0)
 
   end
 
@@ -806,7 +597,32 @@ function fishery_model_plot(; toplot=("fishing", "survey"), n_sample=min(250, si
   
     nt = length(survey_time)
     colours = get(ColorSchemes.tab20c, 1:nt, :extrema )[rand(1:(nt-1), (nt-1) )]
-    pl = scatter!(pl, b0, b1;  alpha=0.2, color=colours, markersize=2.5, markerstrokewidth=0)
+    pl = scatter!(pl, b0, b1; legend=false, alpha=0.2, color=colours, markersize=2.5, markerstrokewidth=0)
+
+  end
+
+ 
+
+  if any(isequal.("surplus_production", toplot))  
+    # $S(B) = rB (1-B/K)$ (i.e., "Schaefer" 1954 form )
+
+    K = vec( Array(res[:, Symbol("K"), :]) )[ss]
+    r = vec( Array(res[:, Symbol("r"), :]) )[ss]
+    q1 = vec( Array(res[:, Symbol("q1"), :]) )[ss]
+
+    b = bio[:,ss]  ./ K' .* q1'
+    sp = r' .* b  .* (1.0 .- b) # surplus prod
+ 
+    nsims = size(bio)[2]
+    ss = rand(1:nsims, 1000)  # sample index
+  
+    nt = length(survey_time)
+    colours = get(ColorSchemes.tab20c, 1:nt, :extrema )[rand(1:nt, nt )]
+    for i in 1:nt
+      pl = scatter!(pl, b[i,:], sp[i,:];  alpha=0.3, color=colours[i], markersize=2.0, markerstrokewidth=0)
+    end
+    pl = plot(pl; legend=false, xlab="Biomass", ylab="Surplus Production")
+  
   end
 
   return(pl)

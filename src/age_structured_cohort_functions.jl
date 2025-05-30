@@ -218,7 +218,7 @@ function compute_biomass( B, maturity_ogive )
 end
 
 
-function cohort_analysis!( N, C, M; iplus=na ) 
+function cohort_analysis( N, C, M; iplus=na ) 
 
   # back-propagate numbers of oldest groups based upon assumed natural and computed fishing mortalties 
   na, ny = size(C)
@@ -328,8 +328,8 @@ Turing.@model function Virtual_Population_Analysis_basic(
   Fp ~ arraydist( LogNormal.( log.(Fp0), 0.25) ) 
   Ft ~ arraydist( LogNormal.( log.(Ft0), 0.25) ) 
   Fs = setup_F( Fp, Ft; type=Ftype, iplus=iplus ) 
-  Ns = setup_N( Cobs, Fs, M; iplus=iplus ) 
-  Ns = cohort_analysis!( Ns, Cobs, M; iplus=iplus  ) 
+  N0 = setup_N( Cobs, Fs, M; iplus=iplus ) 
+  Ns = cohort_analysis( N0, Cobs, M; iplus=iplus  ) 
   Fs = compute_fishing_mortality!(Fs, Ns, M; iplus=iplus )  # update F with finalized N's
   
   j = findall( x -> x <= 0, Fs )
@@ -355,8 +355,8 @@ Turing.@model function Virtual_Population_Analysis(
   Fp ~ arraydist( LogNormal.( log.(Fp0), 0.25) ) 
   Ft ~ arraydist( LogNormal.( log.(Ft0), 0.25) ) 
   Fs = setup_F( Fp, Ft; type=Ftype, iplus=iplus ) 
-  Ns = T.(setup_N( Cobs, Fs, M; iplus=iplus ))  
-  Ns = cohort_analysis!( Ns, Cobs, M; iplus=iplus  ) 
+  N0 = T.(setup_N( Cobs, Fs, M; iplus=iplus ))  
+  Ns = cohort_analysis( N0, Cobs, M; iplus=iplus  ) 
   Fs = compute_fishing_mortality!(Fs, Ns, M; iplus=iplus )  # update F with finalized N's
   
   j = findall( x -> x <= 0, Fs )
@@ -381,12 +381,12 @@ end
 
 
 
-Turing.@model function Adaptive_Virtual_Population_Analysis( Ftype="separable", M = repeat([0.2], na), iplus=na ) 
+Turing.@model function Adaptive_Virtual_Population_Analysis( Ftype="separable", M = repeat([0.2], na), C=C, iplus=na ) 
   Fp ~ arraydist( LogNormal.( log.(Fp0), 0.25) ) 
   Ft ~ arraydist( LogNormal.( log.(Ft0), 0.25) ) 
   F = setup_F( Fp, Ft; type=Ftype, iplus=iplus ) 
-  N = setup_N( C, F, M; iplus=iplus ) 
-  N = cohort_analysis!( N, C, M; iplus=iplus  ) 
+  N0 = setup_N( C, F, M; iplus=iplus ) 
+  N = cohort_analysis( N0, C, M; iplus=iplus  ) 
   q ~ arraydist( LogNormal.( log.(q0), 0.25) ) 
   mu = log.(q .* N) 
   muyi = view( mu, :, yi ) # overlapping subset
@@ -400,9 +400,13 @@ Turing.@model function Integrated_Catch_Analysis( Ftype="separable", M = repeat(
   Fp ~ arraydist( LogNormal.( log.(Fp0), 0.25) ) 
   Ft ~ arraydist( LogNormal.( log.(Ft0), 0.25) ) 
   F = setup_F( Fp, Ft; type=Ftype, iplus=iplus ) 
-  N = setup_N( C, F, M; iplus=iplus ) 
-  N = cohort_analysis!( N, C, M; iplus=iplus  ) 
-  F[a, y] = log.( N[a, y] ./  N[a.+1, y.+1]) .- M[a] # update F estimates after convergence
+  N0 = setup_N( C, F, M; iplus=iplus ) 
+  N = cohort_analysis( N0, C, M; iplus=iplus  ) 
+  for a in 1:(na-1)
+    for y in 1:(ny-1)
+      F[a, y] = log.( N[a, y] ./  N[a.+1, y.+1]) .- M[a] # update F estimates after convergence
+    end
+  end
   Cpred =  F ./ ( F .+ M ) .* N .* (1.0 .- exp.(- (F .- M) ) )
   C ~ arraydist( LogNormal.( Cpred, 0.25 ) )  # # likelihood .. Broadcast not working?
   q ~ arraydist( LogNormal.( log.(q0), 0.25) ) 
@@ -452,13 +456,13 @@ Turing.@model function sequential_population_analysis()
   for i in 1:na
   for j in 1:ny
     MeanLogM[i,j] = MeanLogAgeM[i] + MeanLogDeltaM[j]
-    M[i,j] ~ Truncated( LogNormal( MeanLogM[i,j], PrecLogM), 0, 10.0)
+    M[i,j] ~ truncated( LogNormal( MeanLogM[i,j], PrecLogM), 0, 10.0)
   end
   end
   
   # Cohort equation (starts with young in earliest time period (unlike traditional VPA)
   N = exp(LogN)
-  N = cohort_analysis!( N, C, M; Mtype="forward" ) 
+  N = cohort_analysis( N, C, M; Mtype="forward" ) 
   logN = log.(maximum.(N, 10))
   
   # Prior on q's# 
