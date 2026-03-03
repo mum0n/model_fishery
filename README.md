@@ -33,15 +33,15 @@ This project presents some of the main modelling approaches used in Fisheries As
 ---
 
 
-## Example snow crab data are in RData form: 
+## Example snow crab data are in rdz form: 
 
-- [biodyn_number_size_struct.RData](data/biodyn_number_size_struct.RData) 
+- [biodyn_number_size_struct.rdz](data/biodyn_number_size_struct.rdz) 
         
     - time series by large areal units, number, size, habitat, etc.
 
     - used by stage structured models
 
-- [biodyn_biomass.RData](data/biodyn_biomass.RData) 
+- [biodyn_biomass.rdz](data/biodyn_biomass.rdz) 
         
     - time series by large areal units in biomass 
 
